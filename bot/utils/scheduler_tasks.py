@@ -5,25 +5,8 @@ from bot.database.requests import get_or_create_daily_progress, get_user_stats
 from sqlalchemy import select
 from datetime import date, datetime
 
-REMINDERS = {
-    "shooting": [
-        {
-            "text": "✨ Пора творить шедевры! Не забудь сегодня записать свои ролики. Ты будешь сиять! ❤️",
-            "media": "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKVUn7iM8FMEU24/giphy.gif",
-            "type": "animation"
-        }
-    ],
-    "upload": [
-        {
-            "text": "🚀 Время делиться контентом! Твои зрители уже ждут новые видео. Пора выкладывать! 🥰",
-            "media": "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l0Exd9XJm0H9H8LpG/giphy.gif",
-            "type": "animation"
-        }
-    ]
-}
-
 async def check_and_send_reminders(bot: Bot):
-    # Only Mon-Fri (0-4)
+    # Только с понедельника по пятницу
     if date.today().weekday() > 4:
         return
 
@@ -34,31 +17,53 @@ async def check_and_send_reminders(bot: Bot):
         users = result.scalars().all()
         
         for user in users:
-            progress = await get_or_create_daily_progress(user.id)
-            
-            # Check shooting reminder
             if user.shooting_time == now_time:
-                if progress.shots_count < 3:
-                    await send_user_reminder(bot, user.id, "shooting")
-            
-            # Check upload reminder
-            if user.upload_time == now_time:
-                if not all([progress.uploaded_yt, progress.uploaded_ig, progress.uploaded_tt, progress.uploaded_vk]):
-                    await send_user_reminder(bot, user.id, "upload")
+                progress = await get_or_create_daily_progress(user.id)
+                await send_unified_reminder(bot, user, progress)
 
-async def send_user_reminder(bot: Bot, user_id: int, reminder_type: str):
-    reminder = random.choice(REMINDERS[reminder_type])
+async def send_unified_reminder(bot: Bot, user: User, progress: DailyProgress):
+    shots = progress.shots_count
+    goal_shots = 3
+    
+    platforms = [progress.uploaded_yt, progress.uploaded_ig, progress.uploaded_tt, progress.uploaded_vk]
+    uploaded = sum(platforms)
+    goal_uploaded = 4
+    
+    # Тексты для разных ситуаций
+    if shots >= goal_shots and uploaded >= goal_uploaded:
+        texts = [
+            f"🌟 Сегодня ты выложила {uploaded}/{goal_uploaded} роликов и записала {shots}/{goal_shots} роликов. Ты большая молодец! Твой контент покоряет мир! ✨",
+            f"💎 План выполнен на 100%! Записано: {shots}/{goal_shots}, Выложено: {uploaded}/{goal_uploaded}. Ты просто супер-креатор! 🔥",
+            f"🌈 Идеальный день! {shots} снято, {uploaded} выложено. Отдыхай с чувством выполненного долга, ты лучшая! ❤️"
+        ]
+    else:
+        left_shots = max(0, goal_shots - shots)
+        left_uploaded = max(0, goal_uploaded - uploaded)
+        
+        status_line = f"Сегодня ты выложила {uploaded}/{goal_uploaded} роликов и записала {shots}/{goal_shots} роликов."
+        todo_line = f"Осталось {left_uploaded} выложить и {left_shots} снять. Продолжаем в том же духе! 🚀"
+        
+        texts = [
+            f"⚡️ {status_line}\n{todo_line}",
+            f"💪 {status_line}\nЕще немного поднажать: {todo_line}",
+            f"🎬 {status_line}\n{todo_line} Мир ждет твои шедевры! 🥰"
+        ]
+
+    text = random.choice(texts)
+    
     try:
-        if reminder["type"] == "animation":
-            await bot.send_animation(
-                chat_id=user_id,
-                animation=reminder["media"],
-                caption=reminder["text"]
-            )
-        else:
-            await bot.send_message(chat_id=user_id, text=reminder["text"])
+        # Красивая анимация для поддержки
+        animation = "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKVUn7iM8FMEU24/giphy.gif"
+        if shots >= goal_shots and uploaded >= goal_uploaded:
+            animation = "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l0Exd9XJm0H9H8LpG/giphy.gif"
+
+        await bot.send_animation(
+            chat_id=user.id,
+            animation=animation,
+            caption=text
+        )
     except Exception as e:
-        print(f"Failed to send reminder to {user_id}: {e}")
+        print(f"Failed to send reminder to {user.id}: {e}")
 
 async def send_weekly_report(bot: Bot):
     async with SessionLocal() as session:

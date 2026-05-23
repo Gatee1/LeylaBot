@@ -56,13 +56,12 @@ def settings_kb():
         [InlineKeyboardButton(text="« Назад", callback_data="main_menu")]
     ])
 
-def time_settings_kb(reminder_type: str):
-    # type can be 'shooting' or 'upload'
+def time_settings_kb():
     times = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]
     keyboard = []
     row = []
     for t in times:
-        row.append(InlineKeyboardButton(text=t, callback_data=f"settime_{reminder_type}_{t}"))
+        row.append(InlineKeyboardButton(text=t, callback_data=f"settime_{t}"))
         if len(row) == 4:
             keyboard.append(row)
             row = []
