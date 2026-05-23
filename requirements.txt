@@ -2,7 +2,8 @@ aiogram
 sqlalchemy
 asyncpg
 pydantic-settings
-apscheduler
+apscheduler==3.10.4
+tzlocal
 certifi
 fastapi
 uvicorn

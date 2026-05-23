@@ -6,7 +6,11 @@ import certifi
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from apscheduler.schedulers.asyncio import AsyncioScheduler
+try:
+    from apscheduler.schedulers.asyncio import AsyncioScheduler
+except ImportError:
+    # Fallback for some environments
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler as AsyncioScheduler
 
 from bot.config import config
 from bot.database.models import init_db
