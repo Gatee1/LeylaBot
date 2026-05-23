@@ -18,8 +18,9 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(128))
     full_name: Mapped[str] = mapped_column(String(128))
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
-    shooting_time: Mapped[str] = mapped_column(String(5), default="11:00")
-    upload_time: Mapped[str | None] = mapped_column(String(5), nullable=True) # Unified time
+    morning_time: Mapped[str] = mapped_column(String(5), default="10:00")
+    afternoon_time: Mapped[str] = mapped_column(String(5), default="14:00")
+    evening_time: Mapped[str] = mapped_column(String(5), default="19:00")
     streak: Mapped[int] = mapped_column(Integer, default=0)
     max_streak: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

@@ -17,7 +17,8 @@ async def check_and_send_reminders(bot: Bot):
         users = result.scalars().all()
         
         for user in users:
-            if user.shooting_time == now_time:
+            # Проверяем все три времени напоминаний
+            if now_time in [user.morning_time, user.afternoon_time, user.evening_time]:
                 progress = await get_or_create_daily_progress(user.id)
                 await send_unified_reminder(bot, user, progress)
 
@@ -32,21 +33,21 @@ async def send_unified_reminder(bot: Bot, user: User, progress: DailyProgress):
     # Тексты для разных ситуаций
     if shots >= goal_shots and uploaded >= goal_uploaded:
         texts = [
-            f"🌟 Сегодня ты выложила {uploaded}/{goal_uploaded} роликов и записала {shots}/{goal_shots} роликов. Ты большая молодец! Твой контент покоряет мир! ✨",
-            f"💎 План выполнен на 100%! Записано: {shots}/{goal_shots}, Выложено: {uploaded}/{goal_uploaded}. Ты просто супер-креатор! 🔥",
-            f"🌈 Идеальный день! {shots} снято, {uploaded} выложено. Отдыхай с чувством выполненного долга, ты лучшая! ❤️"
+            f"🌟 Сегодня ты выложила {uploaded}/{goal_uploaded} роликов и записала {shots}/{goal_shots} роликов. Ты молодец!",
+            f"💎 План выполнен на 100%! Записано: {shots}/{goal_shots}, Выложено: {uploaded}/{goal_uploaded}. Ты большая умница! ✨",
+            f"🌈 Идеальный день! {shots} снято, {uploaded} выложено. Ты просто супер! ❤️"
         ]
     else:
         left_shots = max(0, goal_shots - shots)
         left_uploaded = max(0, goal_uploaded - uploaded)
         
         status_line = f"Сегодня ты выложила {uploaded}/{goal_uploaded} роликов и записала {shots}/{goal_shots} роликов."
-        todo_line = f"Осталось {left_uploaded} выложить и {left_shots} снять. Продолжаем в том же духе! 🚀"
+        todo_line = f"осталось {left_uploaded} выложить и {left_shots} снять, продолжаем!"
         
         texts = [
-            f"⚡️ {status_line}\n{todo_line}",
-            f"💪 {status_line}\nЕще немного поднажать: {todo_line}",
-            f"🎬 {status_line}\n{todo_line} Мир ждет твои шедевры! 🥰"
+            f"⚡️ {status_line} {todo_line}",
+            f"💪 {status_line} Давай поднажмем, {todo_line}",
+            f"🎬 {status_line} Еще чуть-чуть: {todo_line} 🥰"
         ]
 
     text = random.choice(texts)

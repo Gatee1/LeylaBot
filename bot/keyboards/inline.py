@@ -52,7 +52,9 @@ def upload_kb(progress):
 
 def settings_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⏰ Настройка времени", callback_data="setup_reminders", style="primary")],
+        [InlineKeyboardButton(text="🌅 Утро", callback_data="set_morning"),
+         InlineKeyboardButton(text="☀️ День", callback_data="set_afternoon"),
+         InlineKeyboardButton(text="🌙 Вечер", callback_data="set_evening")],
         [InlineKeyboardButton(text="« Назад", callback_data="main_menu")]
     ])
 
