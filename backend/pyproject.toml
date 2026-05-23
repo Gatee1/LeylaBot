@@ -1,0 +1,39 @@
+[project]
+name = "lelya-backend"
+version = "0.1.0"
+description = "Backend for Lelya Creator Studio — Telegram Mini App + Bot"
+authors = [
+    { name = "Senior Backend Engineer", email = "senior@example.com" }
+]
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "aiogram>=3.3.0",
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.1",
+    "pydantic[email]>=2.6.0",
+    "pydantic-settings>=2.1.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.7",
+    "httpx>=0.26.0",
+    "redis>=5.0.1",
+    "apscheduler>=3.10.4",
+    "python-dotenv>=1.0.1",
+    "structlog>=24.1.0",
+    "colorama>=0.4.6",
+    "certifi>=2024.2.2",
+    "aiofiles>=23.2.1",
+    "tzlocal>=5.2",
+]
+
+[tool.pyright]
+include = ["app"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
