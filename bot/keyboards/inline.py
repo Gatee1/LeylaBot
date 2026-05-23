@@ -1,5 +1,8 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from bot.database.models import DailyProgress
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bot.database.models import DailyProgress
 
 def main_menu_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -31,7 +34,7 @@ def shooting_kb(current_count: int):
         [InlineKeyboardButton(text="« Назад", callback_data="main_menu")]
     ])
 
-def upload_kb(progress: DailyProgress):
+def upload_kb(progress):
     def get_icon(status): return "✅" if status else "❌"
     def get_style(status): return "success" if status else "danger"
     
