@@ -18,7 +18,7 @@ except ImportError:
 
 from bot.config import config
 from bot.database.models import init_db
-from bot.handlers import start, tracking, reminders, profile, ideas
+from bot.handlers import start, tracking, reminders, profile, ideas, hashtags, reflection
 
 # SSL fix for macOS
 os.environ['SSL_CERT_FILE'] = certifi.where()
@@ -53,6 +53,8 @@ async def main():
     dp.include_router(reminders.router)
     dp.include_router(profile.router)
     dp.include_router(ideas.router)
+    dp.include_router(hashtags.router)
+    dp.include_router(reflection.router)
     
     # Start API server in background
     import uvicorn

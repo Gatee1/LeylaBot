@@ -91,7 +91,15 @@ async def get_studio(user_id: int = Depends(verify_telegram_data)):
         ],
         "activity": activity,
         "ideas": [
-            { "id": str(i.id), "title": i.text, "platform": "Reels", "status": "planned", "created_at": i.created_at.isoformat() }
+            { 
+                "id": str(i.id), 
+                "title": i.text if i.text else "Без текста", 
+                "platform": "Reels", 
+                "status": "planned", 
+                "created_at": i.created_at.isoformat(),
+                "media_type": i.media_type,
+                "has_media": bool(i.media_id)
+            }
             for i in ideas
         ]
     }

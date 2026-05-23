@@ -27,6 +27,8 @@ class User(Base):
     
     progress: Mapped[list["DailyProgress"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     ideas: Mapped[list["Idea"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    hashtags: Mapped[list["Hashtag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    reflections: Mapped[list["Reflection"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 class DailyProgress(Base):
     __tablename__ = "daily_progress"
@@ -50,14 +52,45 @@ class Idea(Base):
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    text: Mapped[str] = mapped_column(String)
-    media_url: Mapped[str | None] = mapped_column(String)
-    media_type: Mapped[str | None] = mapped_column(String)  # photo, video, gif
+    text: Mapped[str | None] = mapped_column(String, nullable=True)
+    media_id: Mapped[str | None] = mapped_column(String, nullable=True) # Telegram file_id
+    media_type: Mapped[str | None] = mapped_column(String(32), nullable=True) # photo, video, animation
     status: Mapped[str] = mapped_column(String(32), default="pending")  # pending, filming, done
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     
     user: Mapped["User"] = relationship(back_populates="ideas")
 
+class Hashtag(Base):
+    __tablename__ = "hashtags"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(64))
+    content: Mapped[str] = mapped_column(String)
+    
+    user: Mapped["User"] = relationship(back_populates="hashtags")
+
+class Reflection(Base):
+    __tablename__ = "reflections"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    date: Mapped[date] = mapped_column(Date, default=date.today)
+    answer: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    
+    user: Mapped["User"] = relationship(back_populates="reflections")
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        
+    # Manual migration for existing SQLite database
+    async with engine.connect() as conn:
+        # Add columns to ideas table if they don't exist
+        for column, type_ in [("media_id", "TEXT"), ("media_type", "VARCHAR(32)")]:
+            try:
+                await conn.execute(f"ALTER TABLE ideas ADD COLUMN {column} {type_}")
+                await conn.commit()
+            except Exception:
+                pass # Column already exists

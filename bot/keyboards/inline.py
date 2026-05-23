@@ -15,6 +15,10 @@ def main_menu_kb():
             InlineKeyboardButton(text="💡 Идеи", callback_data="view_ideas")
         ],
         [
+            InlineKeyboardButton(text="☁️ Хэштеги", callback_data="view_hashtags"),
+            InlineKeyboardButton(text="🌙 Рефлексия", callback_data="view_reflections")
+        ],
+        [
             InlineKeyboardButton(text="📱 Открыть Mini App", web_app=WebAppInfo(url="https://mini-app-leyla.vercel.app"))
         ],
         [

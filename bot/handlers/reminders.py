@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from bot.keyboards.inline import main_menu_kb, settings_kb
 from bot.database.models import SessionLocal, User
+from bot.utils.media_assets import ASSETS
 
 router = Router()
 
@@ -17,13 +18,16 @@ async def setup_reminders(callback: types.CallbackQuery):
     async with SessionLocal() as session:
         user = await session.get(User, callback.from_user.id)
     
-    await callback.message.edit_caption(
-        caption=(
-            "⏰ <b>Настройка времени напоминаний</b>\n\n"
-            f"🌅 Утро: <b>{user.morning_time}</b>\n"
-            f"☀️ День: <b>{user.afternoon_time}</b>\n"
-            f"🌙 Вечер: <b>{user.evening_time}</b>\n\n"
-            "Выбери, какое время хочешь изменить, и напиши новое в чат (например, 12:30):"
+    await callback.message.edit_media(
+        media=types.InputMediaAnimation(
+            media=ASSETS["settings"],
+            caption=(
+                "⏰ <b>Настройка времени напоминаний</b>\n\n"
+                f"🌅 Утро: <b>{user.morning_time}</b>\n"
+                f"☀️ День: <b>{user.afternoon_time}</b>\n"
+                f"🌙 Вечер: <b>{user.evening_time}</b>\n\n"
+                "Выбери, какое время хочешь изменить, и напиши новое в чат (например, 12:30):"
+            )
         ),
         reply_markup=settings_kb()
     )
@@ -63,7 +67,8 @@ async def process_time_input(message: types.Message, state: FSMContext):
         await session.commit()
         
     await state.clear()
-    await message.answer(
-        f"✅ Время успешно сохранено: <b>{time_str}</b>",
+    await message.answer_animation(
+        animation=ASSETS["success"],
+        caption=f"✅ Время успешно сохранено: <b>{time_str}</b>",
         reply_markup=main_menu_kb()
     )
