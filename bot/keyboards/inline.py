@@ -1,7 +1,5 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-
-# Note: Styles 'primary', 'success', 'danger' are available since Telegram Bot API 9.4
-# If aiogram doesn't support them natively yet, we pass them as extra arguments
+from bot.database.models import DailyProgress
 
 def main_menu_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -51,15 +49,20 @@ def upload_kb(progress: DailyProgress):
 
 def settings_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Выбор персонажа", callback_data="change_character", style="primary")],
-        [InlineKeyboardButton(text="⏰ Настройка уведомлений", callback_data="setup_reminders", style="primary")],
+        [InlineKeyboardButton(text="⏰ Настройка времени", callback_data="setup_reminders", style="primary")],
         [InlineKeyboardButton(text="« Назад", callback_data="main_menu")]
     ])
 
-def character_kb():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💅 Подружка", callback_data="char_Girlfriend", style="primary")],
-        [InlineKeyboardButton(text="💪 Тренер", callback_data="char_Coach", style="danger")],
-        [InlineKeyboardButton(text="🐱 Котик", callback_data="char_Cat", style="success")],
-        [InlineKeyboardButton(text="« Назад", callback_data="settings")]
-    ])
+def time_settings_kb(reminder_type: str):
+    # type can be 'shooting' or 'upload'
+    times = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]
+    keyboard = []
+    row = []
+    for t in times:
+        row.append(InlineKeyboardButton(text=t, callback_data=f"settime_{reminder_type}_{t}"))
+        if len(row) == 4:
+            keyboard.append(row)
+            row = []
+    
+    keyboard.append([InlineKeyboardButton(text="« Назад", callback_data="settings")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

@@ -18,7 +18,8 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(128))
     full_name: Mapped[str] = mapped_column(String(128))
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
-    character: Mapped[str] = mapped_column(String(32), default="Girlfriend")  # Girlfriend, Coach, Cat
+    shooting_time: Mapped[str] = mapped_column(String(5), default="11:00")
+    upload_time: Mapped[str] = mapped_column(String(5), default="18:00")
     streak: Mapped[int] = mapped_column(Integer, default=0)
     max_streak: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

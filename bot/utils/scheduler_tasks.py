@@ -1,15 +1,33 @@
 import random
 from aiogram import Bot
 from bot.database.models import SessionLocal, User, DailyProgress
-from bot.database.requests import get_or_create_daily_progress
-from bot.utils.reminders_data import CHARACTERS
+from bot.database.requests import get_or_create_daily_progress, get_user_stats
 from sqlalchemy import select
-from datetime import date
+from datetime import date, datetime
 
-async def send_reminder(bot: Bot, reminder_type: str):
+REMINDERS = {
+    "shooting": [
+        {
+            "text": "✨ Пора творить шедевры! Не забудь сегодня записать свои ролики. Ты будешь сиять! ❤️",
+            "media": "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKVUn7iM8FMEU24/giphy.gif",
+            "type": "animation"
+        }
+    ],
+    "upload": [
+        {
+            "text": "🚀 Время делиться контентом! Твои зрители уже ждут новые видео. Пора выкладывать! 🥰",
+            "media": "https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l0Exd9XJm0H9H8LpG/giphy.gif",
+            "type": "animation"
+        }
+    ]
+}
+
+async def check_and_send_reminders(bot: Bot):
     # Only Mon-Fri (0-4)
     if date.today().weekday() > 4:
         return
+
+    now_time = datetime.now().strftime("%H:%M")
 
     async with SessionLocal() as session:
         result = await session.execute(select(User))
@@ -18,32 +36,29 @@ async def send_reminder(bot: Bot, reminder_type: str):
         for user in users:
             progress = await get_or_create_daily_progress(user.id)
             
-            # Check if already done
-            if reminder_type == "shooting" and progress.shots_count >= 3:
-                continue
-            if reminder_type == "upload" and all([progress.uploaded_yt, progress.uploaded_ig, progress.uploaded_tt, progress.uploaded_vk]):
-                continue
-                
-            char_data = CHARACTERS.get(user.character, CHARACTERS["Girlfriend"])
-            reminder = random.choice(char_data[reminder_type])
+            # Check shooting reminder
+            if user.shooting_time == now_time:
+                if progress.shots_count < 3:
+                    await send_user_reminder(bot, user.id, "shooting")
             
-            try:
-                if reminder["type"] == "animation":
-                    await bot.send_animation(
-                        chat_id=user.id,
-                        animation=reminder["media"],
-                        caption=reminder["text"]
-                    )
-                elif reminder["type"] == "photo":
-                    await bot.send_photo(
-                        chat_id=user.id,
-                        photo=reminder["media"],
-                        caption=reminder["text"]
-                    )
-                else:
-                    await bot.send_message(chat_id=user.id, text=reminder["text"])
-            except Exception as e:
-                print(f"Failed to send reminder to {user.id}: {e}")
+            # Check upload reminder
+            if user.upload_time == now_time:
+                if not all([progress.uploaded_yt, progress.uploaded_ig, progress.uploaded_tt, progress.uploaded_vk]):
+                    await send_user_reminder(bot, user.id, "upload")
+
+async def send_user_reminder(bot: Bot, user_id: int, reminder_type: str):
+    reminder = random.choice(REMINDERS[reminder_type])
+    try:
+        if reminder["type"] == "animation":
+            await bot.send_animation(
+                chat_id=user_id,
+                animation=reminder["media"],
+                caption=reminder["text"]
+            )
+        else:
+            await bot.send_message(chat_id=user_id, text=reminder["text"])
+    except Exception as e:
+        print(f"Failed to send reminder to {user_id}: {e}")
 
 async def send_weekly_report(bot: Bot):
     async with SessionLocal() as session:

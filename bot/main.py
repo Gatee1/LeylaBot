@@ -41,9 +41,8 @@ async def main():
     # Initialize Scheduler
     scheduler = AsyncioScheduler(timezone=config.DEFAULT_TIMEZONE)
     
-    from bot.utils.scheduler_tasks import send_reminder, send_weekly_report
-    scheduler.add_job(send_reminder, "cron", hour=11, minute=0, args=[bot, "shooting"])
-    scheduler.add_job(send_reminder, "cron", hour=18, minute=0, args=[bot, "upload"])
+    from bot.utils.scheduler_tasks import check_and_send_reminders, send_weekly_report
+    scheduler.add_job(check_and_send_reminders, "interval", minutes=1, args=[bot])
     scheduler.add_job(send_weekly_report, "cron", day_of_week="mon", hour=10, minute=0, args=[bot])
     
     scheduler.start()

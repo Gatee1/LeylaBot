@@ -1,6 +1,6 @@
 from aiogram import Router, types, F
 from bot.database.requests import get_user_stats, get_user
-from bot.keyboards.inline import settings_kb, character_kb, main_menu_kb
+from bot.keyboards.inline import settings_kb, main_menu_kb
 from bot.database.models import SessionLocal, User
 
 router = Router()
@@ -41,29 +41,9 @@ async def view_stats(callback: types.CallbackQuery):
 @router.callback_query(F.data == "settings")
 async def settings_menu(callback: types.CallbackQuery):
     await callback.message.edit_caption(
-        caption="⚙️ <b>Настройки:</b>\nЗдесь можно изменить персонажа напоминаний и время уведомлений.",
+        caption="⚙️ <b>Настройки:</b>\nЗдесь можно изменить время уведомлений.",
         reply_markup=settings_kb()
     )
-
-@router.callback_query(F.data == "change_character")
-async def change_char_menu(callback: types.CallbackQuery):
-    user = await get_user(callback.from_user.id)
-    await callback.message.edit_caption(
-        caption=f"👤 <b>Выбери персонажа:</b>\nСейчас выбран: <b>{user.character}</b>",
-        reply_markup=character_kb()
-    )
-
-@router.callback_query(F.data.startswith("char_"))
-async def set_character(callback: types.CallbackQuery):
-    char_name = callback.data.split("_")[1]
-    
-    async with SessionLocal() as session:
-        user = await session.get(User, callback.from_user.id)
-        user.character = char_name
-        await session.commit()
-        
-    await callback.answer(f"Персонаж изменен на: {char_name}")
-    await back_to_main(callback)
 
 async def back_to_main(callback: types.CallbackQuery):
     await callback.message.edit_caption(
