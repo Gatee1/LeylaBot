@@ -12,7 +12,12 @@ async def add_user(user_id: int, username: str, full_name: str):
         if not user:
             user = User(id=user_id, username=username, full_name=full_name)
             session.add(user)
-            await session.commit()
+            try:
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                # If user was created by another concurrent request, just return existing
+                user = await session.get(User, user_id)
         return user
 
 async def get_or_create_daily_progress(user_id: int, target_date: date = None):
