@@ -1,0 +1,10 @@
+aiogram
+sqlalchemy
+asyncpg
+pydantic-settings
+apscheduler
+certifi
+fastapi
+uvicorn
+python-multipart
+python-dotenv
