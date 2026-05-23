@@ -3,13 +3,17 @@ import logging
 import sys
 import os
 import certifi
+
+# Fix imports for BotHost/Production
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+
 try:
     from apscheduler.schedulers.asyncio import AsyncioScheduler
 except ImportError:
-    # Fallback for some environments
     from apscheduler.schedulers.asyncio import AsyncIOScheduler as AsyncioScheduler
 
 from bot.config import config
@@ -26,9 +30,6 @@ async def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         stream=sys.stdout
     )
-    
-    # Initialize DB
-    await init_db()
     
     # Initialize Bot and Dispatcher
     bot = Bot(
@@ -57,10 +58,14 @@ async def main():
     # Robust polling loop
     while True:
         try:
+            logging.info("Connecting to database...")
+            await init_db()
+            
             logging.info("Starting bot polling...")
             await dp.start_polling(bot, scheduler=scheduler)
         except Exception as e:
-            logging.error(f"Polling error: {e}")
+            logging.error(f"Critical error: {e}")
+            logging.info("Retrying in 5 seconds...")
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
