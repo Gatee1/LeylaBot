@@ -3,7 +3,7 @@ from pydantic import SecretStr
 
 class Settings(BaseSettings):
     BOT_TOKEN: SecretStr
-    DATABASE_URL: SecretStr
+    DATABASE_URL: str = "sqlite+aiosqlite:///db.sqlite3"
     
     # Timezone for reminders
     DEFAULT_TIMEZONE: str = "Europe/Moscow"

@@ -4,7 +4,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from bot.config import config
 
-engine = create_async_engine(config.DATABASE_URL.get_secret_value(), echo=False)
+# Using SQLite for local storage on BotHost
+engine = create_async_engine("sqlite+aiosqlite:///db.sqlite3", echo=False)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 class Base(AsyncAttrs, DeclarativeBase):

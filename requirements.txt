@@ -1,6 +1,6 @@
 aiogram
 sqlalchemy
-asyncpg
+aiosqlite
 pydantic-settings
 apscheduler==3.10.4
 tzlocal

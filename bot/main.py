@@ -55,6 +55,17 @@ async def main():
     dp.include_router(profile.router)
     dp.include_router(ideas.router)
     
+    # Start API server in background
+    import uvicorn
+    from bot.api import app as api_app
+    from threading import Thread
+    
+    def run_api():
+        uvicorn.run(api_app, host="0.0.0.0", port=3000)
+    
+    api_thread = Thread(target=run_api, daemon=True)
+    api_thread.start()
+    
     # Robust polling loop
     while True:
         try:
