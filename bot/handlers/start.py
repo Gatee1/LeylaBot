@@ -14,15 +14,15 @@ async def cmd_start(message: types.Message):
     )
     
     welcome_text = (
-        f"👋 Привет, <b>{message.from_user.first_name}</b>!\n\n"
-        "Я твой личный помощник по контенту. Помогу не забыть про ролики, "
-        "отследить прогресс и держать дисциплину. 🔥\n\n"
+        f"✨ Привет, <b>{message.from_user.first_name}</b>!\n\n"
+        "Я твой премиальный ассистент по контенту. Моя миссия — сделать твой путь креатора легким и дисциплинированным. 💎\n\n"
+        "📈 <b>Твой план:</b> 3 ролика в день (Пн-Пт).\n"
+        "🚀 <b>Твой успех:</b> Все площадки (YT, IG, TT, VK).\n\n"
         "Выбирай действие в меню ниже:"
     )
     
-    # Можно отправить красивую картинку/гифку
-    await message.answer_photo(
-        photo="https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKVUn7iM8FMEU24/giphy.gif",
+    await message.answer_animation(
+        animation="https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqZndqJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKVUn7iM8FMEU24/giphy.gif",
         caption=welcome_text,
         reply_markup=main_menu_kb()
     )

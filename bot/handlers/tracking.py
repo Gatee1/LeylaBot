@@ -24,6 +24,7 @@ async def handle_shot(callback: types.CallbackQuery):
         text += "\n\n🚀 План по съёмке выполнен! Пора выкладывать?"
         
     await callback.answer(f"Записано: {count}")
+    # Using edit_caption to keep the animation/photo
     await callback.message.edit_caption(
         caption=text,
         reply_markup=shooting_kb(progress.shots_count)

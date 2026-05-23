@@ -23,17 +23,28 @@ async def view_ideas(callback: types.CallbackQuery):
     else:
         text = "💡 <b>Твои идеи:</b>\n\n"
         for i, idea in enumerate(ideas[:10], 1):
-            text += f"{i}. {idea.text}\n"
+            text += f"<b>{i}.</b> {idea.text}\n"
         
         if len(ideas) > 10:
             text += f"\n<i>...и еще {len(ideas)-10} идей</i>"
             
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="➕ Добавить идею", callback_data="add_idea")],
+        [types.InlineKeyboardButton(text="➕ Добавить идею", callback_data="add_idea", style="success")],
+        [types.InlineKeyboardButton(text="🗑 Очистить банк", callback_data="clear_ideas", style="danger")],
         [types.InlineKeyboardButton(text="« Назад", callback_data="main_menu")]
     ])
     
     await callback.message.edit_caption(caption=text, reply_markup=kb)
+
+@router.callback_query(F.data == "clear_ideas")
+async def clear_ideas(callback: types.CallbackQuery):
+    from sqlalchemy import delete
+    async with SessionLocal() as session:
+        await session.execute(delete(Idea).where(Idea.user_id == callback.from_user.id))
+        await session.commit()
+    
+    await callback.answer("Банк идей очищен!")
+    await view_ideas(callback)
 
 @router.callback_query(F.data == "add_idea")
 async def add_idea_start(callback: types.CallbackQuery, state: FSMContext):
