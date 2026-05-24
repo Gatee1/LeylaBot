@@ -4,51 +4,41 @@ import sys
 import os
 import certifi
 
-# Fix imports for BotHost/Production
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-
-try:
-    from apscheduler.schedulers.asyncio import AsyncioScheduler
-except ImportError:
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler as AsyncioScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.config import config
 from bot.database.models import init_db
 from bot.handlers import start, tracking, reminders, profile, ideas, hashtags, reflection
+from bot.api import app as api_app   # ← импортируем FastAPI app
 
-# SSL fix for macOS
+# SSL fix
 os.environ['SSL_CERT_FILE'] = certifi.where()
 
 async def main():
-    # Logging configuration
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         stream=sys.stdout
     )
     
-    # Initialize Database first
-    logging.info("Initializing database...")
     await init_db()
     
-    # Initialize Bot and Dispatcher
     bot = Bot(
         token=config.BOT_TOKEN.get_secret_value(),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
     
-    # Initialize Scheduler
-    scheduler = AsyncioScheduler(timezone=config.DEFAULT_TIMEZONE)
+    scheduler = AsyncIOScheduler(timezone=config.DEFAULT_TIMEZONE)
     
     from bot.utils.scheduler_tasks import check_and_send_reminders, send_weekly_report
     scheduler.add_job(check_and_send_reminders, "interval", minutes=1, args=[bot])
     scheduler.add_job(send_weekly_report, "cron", day_of_week="mon", hour=10, minute=0, args=[bot])
-    
     scheduler.start()
     
     # Register routers
@@ -60,31 +50,10 @@ async def main():
     dp.include_router(hashtags.router)
     dp.include_router(reflection.router)
     
-    # Start API server in background
-    import uvicorn
-    from bot.api import app as api_app
-    from threading import Thread
+    logging.info("✅ Bot and API prepared. Starting polling...")
     
-    def run_api():
-        # Running on port 7328 as requested
-        uvicorn.run(api_app, host="0.0.0.0", port=7328)
-    
-    api_thread = Thread(target=run_api, daemon=True)
-    api_thread.start()
-    logging.info("✅ API server started on port 7328")
-    
-    # Robust polling loop
-    while True:
-        try:
-            logging.info("Starting bot polling...")
-            await dp.start_polling(bot, scheduler=scheduler)
-        except Exception as e:
-            logging.error(f"Critical error: {e}")
-            logging.info("Retrying in 5 seconds...")
-            await asyncio.sleep(5)
+    # Запускаем бота
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    asyncio.run(main())
