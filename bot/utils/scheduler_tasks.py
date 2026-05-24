@@ -114,24 +114,38 @@ async def send_unified_reminder(bot: Bot, user: User, progress: DailyProgress, i
             # Утренний мудборд
             inspiration_url = random.choice(ASSETS["inspiration"])
             morning_text = f"✨ <b>Твой утренний мудборд для вдохновения:</b>\n\n{text}"
-            await bot.send_photo(
-                chat_id=user.id,
-                photo=inspiration_url,
-                caption=morning_text,
-                parse_mode="HTML"
-            )
+            try:
+                await bot.send_photo(
+                    chat_id=user.id,
+                    photo=inspiration_url,
+                    caption=morning_text,
+                    parse_mode="HTML"
+                )
+            except Exception:
+                await bot.send_message(
+                    chat_id=user.id,
+                    text=morning_text,
+                    parse_mode="HTML"
+                )
         else:
             # Обычное напоминание с анимацией
             animation = ASSETS["shooting"]
             if shots >= goal_shots and uploaded >= goal_uploaded:
                 animation = ASSETS["success"]
 
-            await bot.send_animation(
-                chat_id=user.id,
-                animation=animation,
-                caption=text,
-                parse_mode="HTML"
-            )
+            try:
+                await bot.send_animation(
+                    chat_id=user.id,
+                    animation=animation,
+                    caption=text,
+                    parse_mode="HTML"
+                )
+            except Exception:
+                await bot.send_message(
+                    chat_id=user.id,
+                    text=text,
+                    parse_mode="HTML"
+                )
         logger.info(f"Unified reminder sent to user {user.id}")
     except Exception as e:
         logger.error(f"Failed to send unified reminder to {user.id}: {e}")
