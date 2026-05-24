@@ -53,10 +53,13 @@ class Idea(Base):
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    text: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    platform: Mapped[str | None] = mapped_column(String(32), nullable=True)
     media_id: Mapped[str | None] = mapped_column(String, nullable=True) # Telegram file_id
     media_type: Mapped[str | None] = mapped_column(String(32), nullable=True) # photo, video, animation
-    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending, filming, done
+    status: Mapped[str] = mapped_column(String(32), default="backlog")  # backlog, scheduled, recorded, posted
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     
     user: Mapped["User"] = relationship(back_populates="ideas")
@@ -102,7 +105,14 @@ async def init_db():
     # Manual migration for existing SQLite database
     async with engine.connect() as conn:
         # Add columns to ideas table if they don't exist
-        for column, type_ in [("media_id", "TEXT"), ("media_type", "VARCHAR(32)")]:
+        for column, type_ in [
+            ("title", "VARCHAR(255)"),
+            ("description", "TEXT"),
+            ("platform", "VARCHAR(32)"),
+            ("media_id", "TEXT"),
+            ("media_type", "VARCHAR(32)"),
+            ("scheduled_for", "DATETIME")
+        ]:
             try:
                 await conn.execute(f"ALTER TABLE ideas ADD COLUMN {column} {type_}")
                 await conn.commit()

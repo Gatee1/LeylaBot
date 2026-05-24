@@ -72,12 +72,90 @@ async def update_upload_status(user_id: int, platform: str, status: bool):
         elif platform == "vk": progress.uploaded_vk = status
         await session.commit()
 
-async def get_user_stats(user_id: int):
+async def get_user_ideas(user_id: int):
     async with SessionLocal() as session:
         result = await session.execute(
-            select(DailyProgress).where(DailyProgress.user_id == user_id).order_by(DailyProgress.date.desc())
+            select(Idea).where(Idea.user_id == user_id).order_by(Idea.created_at.desc())
         )
         return result.scalars().all()
+
+async def add_idea(user_id: int, title: str, description: str = None, platform: str = None, status: str = "backlog", scheduled_for: datetime = None):
+    async with SessionLocal() as session:
+        idea = Idea(user_id=user_id, title=title, description=description, platform=platform, status=status, scheduled_for=scheduled_for)
+        session.add(idea)
+        await session.commit()
+        await session.refresh(idea)
+        return idea
+
+async def update_idea(idea_id: int, user_id: int, **kwargs):
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Idea).where(and_(Idea.id == idea_id, Idea.user_id == user_id))
+        )
+        idea = result.scalar_one_or_none()
+        if idea:
+            for key, value in kwargs.items():
+                if hasattr(idea, key):
+                    setattr(idea, key, value)
+            await session.commit()
+            await session.refresh(idea)
+        return idea
+
+async def delete_idea(idea_id: int, user_id: int):
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Idea).where(and_(Idea.id == idea_id, Idea.user_id == user_id))
+        )
+        idea = result.scalar_one_or_none()
+        if idea:
+            await session.delete(idea)
+            await session.commit()
+            return True
+        return False
+
+async def get_studio_today(user_id: int):
+    async with SessionLocal() as session:
+        progress = await get_or_create_daily_progress(user_id, session=session)
+        user = await session.get(User, user_id)
+        
+        # Get activity for last 30 days
+        thirty_days_ago = date.today() - timedelta(days=30)
+        result = await session.execute(
+            select(DailyProgress.shots_count)
+            .where(and_(DailyProgress.user_id == user_id, DailyProgress.date >= thirty_days_ago))
+            .order_by(DailyProgress.date.asc())
+        )
+        activity = result.scalars().all()
+        
+        # Calculate posted count from platform statuses
+        posted = 0
+        if progress.uploaded_yt: posted += 1
+        if progress.uploaded_ig: posted += 1
+        if progress.uploaded_tt: posted += 1
+        if progress.uploaded_vk: posted += 1
+        
+        return {
+            "recorded": progress.shots_count,
+            "posted": posted,
+            "goal": 3,
+            "streak": user.streak if user else 0,
+            "activity": activity
+        }
+
+async def record_studio_action(user_id: int, kind: str):
+    async with SessionLocal() as session:
+        progress = await get_or_create_daily_progress(user_id, session=session)
+        if kind == "recorded":
+            await update_shots(user_id, progress.shots_count + 1)
+        elif kind == "posted":
+            # For simplicity, we just mark platforms in order or add a generic posted counter if needed
+            # But let's just use update_upload_status for one of the platforms that is not yet posted
+            if not progress.uploaded_yt: await update_upload_status(user_id, "yt", True)
+            elif not progress.uploaded_ig: await update_upload_status(user_id, "ig", True)
+            elif not progress.uploaded_tt: await update_upload_status(user_id, "tt", True)
+            elif not progress.uploaded_vk: await update_upload_status(user_id, "vk", True)
+            
+        return await get_studio_today(user_id)
 
 async def get_user_streak(user_id: int):
     async with SessionLocal() as session:
