@@ -2,16 +2,23 @@ import hashlib
 import hmac
 import json
 import time
+from typing import List, Optional
 from urllib.parse import parse_qs
-from fastapi import FastAPI, Header, HTTPException, Depends
+from datetime import date, datetime
+from fastapi import FastAPI, Header, HTTPException, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
-from bot.config import config
-from bot.database.requests import get_user_stats, get_or_create_daily_progress, update_shots, update_upload_status, get_user
-from bot.database.models import SessionLocal, Idea, User
-from sqlalchemy import select
-from datetime import date, datetime, timedelta
+from pydantic import BaseModel, Field
 
-app = FastAPI()
+from bot.config import config
+from bot.database.requests import (
+    get_user, add_user, get_or_create_daily_progress, update_shots, 
+    update_upload_status, get_user_stats, get_user_streak,
+    add_video, get_user_videos, update_video_status,
+    get_weekly_analytics, get_top_videos
+)
+from bot.database.models import SessionLocal, init_db
+
+app = FastAPI(title="Creator OS API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,12 +28,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def verify_telegram_data(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("tma "):
-        # Dev fallback - remove in production or handle properly
-        return 8429170216 # User ID from logs for testing
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+    print("✅ Database initialized successfully")
+
+# --- Schemas ---
+
+class TelegramUser(BaseModel):
+    id: int
+    first_name: str
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    language_code: Optional[str] = None
+
+class AuthResponse(BaseModel):
+    id: int
+    username: Optional[str] = None
+    full_name: str
+    streak: int
+    is_new: bool = False
+
+class ProgressUpdate(BaseModel):
+    shots_count: Optional[int] = None
+    platform: Optional[str] = None # yt, ig, tt, vk
+    status: Optional[bool] = None
+
+class VideoCreate(BaseModel):
+    title: str
+    status: str = "recorded"
+    platform: Optional[str] = None
+
+class VideoResponse(BaseModel):
+    id: int
+    title: str
+    status: str
+    platform: Optional[str]
+    created_at: datetime
+    posted_at: Optional[datetime]
+
+class StreakResponse(BaseModel):
+    streak: int
+    max_streak: int
+
+class AnalyticsWeekly(BaseModel):
+    total_shots: int
+    total_posted: int
+    daily_stats: List[dict]
+
+# --- Auth Dependency ---
+
+def verify_tma_data(x_telegram_init_data: str = Header(None, alias="X-Telegram-Init-Data")):
+    if not x_telegram_init_data:
+        # Dev fallback - enable only for local testing if needed
+        # return {"id": 12345678, "first_name": "Dev", "username": "dev_user"}
+        raise HTTPException(status_code=401, detail="X-Telegram-Init-Data header missing")
         
-    init_data = authorization[4:]
+    init_data = x_telegram_init_data
     parsed_data = {k: v[0] for k, v in parse_qs(init_data).items()}
     
     if "hash" not in parsed_data:
@@ -46,94 +104,133 @@ def verify_telegram_data(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="Data expired")
         
     user_data = json.loads(parsed_data["user"])
-    return user_data["id"]
+    return user_data
 
-@app.get("/api/me")
-async def get_me(user_id: int = Depends(verify_telegram_data)):
-    user = await get_user(user_id)
+# --- Endpoints ---
+
+@app.post("/auth/register", response_model=AuthResponse)
+async def register(tg_user: dict = Depends(verify_tma_data)):
+    try:
+        user_id = tg_user["id"]
+        username = tg_user.get("username")
+        full_name = tg_user.get("first_name", "")
+        if tg_user.get("last_name"):
+            full_name += f" {tg_user['last_name']}"
+            
+        user = await get_user(user_id)
+        is_new = False
+        if not user:
+            user = await add_user(user_id, username, full_name)
+            is_new = True
+            
+        return {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "streak": user.streak,
+            "is_new": is_new
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/auth/me", response_model=AuthResponse)
+async def auth_me(tg_user: dict = Depends(verify_tma_data)):
+    user = await get_user(tg_user["id"])
+    if not user:
+        raise HTTPException(status_code=404, detail="User not registered")
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "streak": user.streak
+    }
+
+@app.get("/users/me", response_model=AuthResponse)
+async def get_me(tg_user: dict = Depends(verify_tma_data)):
+    user = await get_user(tg_user["id"])
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "streak": user.streak
+    }
+
+@app.post("/progress/daily")
+async def update_daily_progress(
+    update: ProgressUpdate, 
+    tg_user: dict = Depends(verify_tma_data)
+):
+    try:
+        user_id = tg_user["id"]
+        if update.shots_count is not None:
+            await update_shots(user_id, update.shots_count)
+        
+        if update.platform and update.status is not None:
+            await update_upload_status(user_id, update.platform, update.status)
+            
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/progress/daily")
+async def get_daily_progress(tg_user: dict = Depends(verify_tma_data)):
+    progress = await get_or_create_daily_progress(tg_user["id"])
+    return {
+        "date": progress.date.isoformat(),
+        "shots_count": progress.shots_count,
+        "platforms": {
+            "yt": progress.uploaded_yt,
+            "ig": progress.uploaded_ig,
+            "tt": progress.uploaded_tt,
+            "vk": progress.uploaded_vk
+        }
+    }
+
+@app.get("/progress/streak", response_model=StreakResponse)
+async def get_streak(tg_user: dict = Depends(verify_tma_data)):
+    return await get_user_streak(tg_user["id"])
+
+@app.post("/videos", response_model=VideoResponse)
+async def create_video(video: VideoCreate, tg_user: dict = Depends(verify_tma_data)):
+    try:
+        return await add_video(tg_user["id"], video.title, video.status, video.platform)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/videos", response_model=List[VideoResponse])
+async def get_videos(tg_user: dict = Depends(verify_tma_data)):
+    return await get_user_videos(tg_user["id"])
+
+@app.patch("/videos/{video_id}/status", response_model=VideoResponse)
+async def patch_video_status(
+    video_id: int, 
+    status: str = Body(..., embed=True), 
+    tg_user: dict = Depends(verify_tma_data)
+):
+    video = await update_video_status(video_id, status)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return video
+
+@app.get("/analytics/week", response_model=AnalyticsWeekly)
+async def get_week_analytics(tg_user: dict = Depends(verify_tma_data)):
+    return await get_weekly_analytics(tg_user["id"])
+
+@app.get("/analytics/top", response_model=List[VideoResponse])
+async def get_top(tg_user: dict = Depends(verify_tma_data)):
+    return await get_top_videos(tg_user["id"])
+
+# Legacy/Compatibility
+@app.get("/api/me")
+async def legacy_me(tg_user: dict = Depends(verify_tma_data)):
+    user = await get_user(tg_user["id"])
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     return {
         "telegram_id": user.id,
         "first_name": user.full_name,
         "username": user.username,
-        "is_new": False, # Simplified for now
-        "streak_days": user.streak,
-        "total_reels": 0, # To be calculated
-        "timezone": user.timezone,
-        "manager_username": None,
-        "notifications_enabled": True
+        "streak_days": user.streak
     }
-
-@app.get("/api/studio")
-async def get_studio(user_id: int = Depends(verify_telegram_data)):
-    progress = await get_or_create_daily_progress(user_id)
-    stats = await get_user_stats(user_id)
-    
-    # Last 30 days activity
-    activity = [0] * 30
-    for s in stats:
-        days_ago = (date.today() - s.date).days
-        if 0 <= days_ago < 30:
-            activity[29 - days_ago] = s.shots_count
-
-    async with SessionLocal() as session:
-        result = await session.execute(
-            select(Idea).where(Idea.user_id == user_id).order_by(Idea.created_at.desc())
-        )
-        ideas = result.scalars().all()
-
-    return {
-        "goals": [
-            { "key": "shoot", "label": "Съемка", "value": progress.shots_count, "total": 3 },
-            { "key": "publish", "label": "Публикация", "value": sum([progress.uploaded_yt, progress.uploaded_ig, progress.uploaded_tt, progress.uploaded_vk]), "total": 4 }
-        ],
-        "activity": activity,
-        "ideas": [
-            { 
-                "id": str(i.id), 
-                "title": i.text if i.text else "Без текста", 
-                "platform": "Reels", 
-                "status": "planned", 
-                "created_at": i.created_at.isoformat(),
-                "media_type": i.media_type,
-                "has_media": bool(i.media_id)
-            }
-            for i in ideas
-        ]
-    }
-
-@app.get("/api/stats")
-async def get_stats(user_id: int = Depends(verify_telegram_data)):
-    progress = await get_or_create_daily_progress(user_id)
-    # Mock reach for beauty, combined with real activity
-    return {
-        "total_reach": 12500,
-        "total_reach_label": "12.5K",
-        "reach_by_day": [120, 450, 300, 600, 800, 550, 900, 1100, 850, 700, 500, 400],
-        "reach_by_platform": [
-            { "platform": "tiktok", "label": "TikTok", "reach": 4500, "reach_label": "4.5K" },
-            { "platform": "youtube", "label": "YouTube", "reach": 2800, "reach_label": "2.8K" },
-            { "platform": "instagram", "label": "Instagram", "reach": 3200, "reach_label": "3.2K" },
-            { "platform": "vk", "label": "VK", "reach": 2000, "reach_label": "2.0K" }
-        ],
-        "metrics": [
-            { "key": "watch_time", "label": "Время просмотра", "value": "142ч", "delta_pct": 12 },
-            { "key": "engagement", "label": "Вовлеченность", "value": "4.2%", "delta_pct": 5 }
-        ],
-        "top_videos": []
-    }
-
-@app.post("/api/ideas")
-async def create_idea(data: dict, user_id: int = Depends(verify_telegram_data)):
-    async with SessionLocal() as session:
-        new_idea = Idea(
-            user_id=user_id,
-            text=data.get("title", "Новая идея"),
-            status="pending"
-        )
-        session.add(new_idea)
-        await session.commit()
-        await session.refresh(new_idea)
-        return { "id": str(new_idea.id), "title": new_idea.text, "status": "planned" }

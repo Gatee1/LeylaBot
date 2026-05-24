@@ -27,6 +27,7 @@ class User(Base):
     
     progress: Mapped[list["DailyProgress"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     ideas: Mapped[list["Idea"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    videos: Mapped[list["Video"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     hashtags: Mapped[list["Hashtag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     reflections: Mapped[list["Reflection"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
@@ -59,6 +60,19 @@ class Idea(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     
     user: Mapped["User"] = relationship(back_populates="ideas")
+
+class Video(Base):
+    __tablename__ = "videos"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(32), default="recorded")  # recorded, edited, posted
+    platform: Mapped[str | None] = mapped_column(String(32), nullable=True) # yt, ig, tt, vk
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    user: Mapped["User"] = relationship(back_populates="videos")
 
 class Hashtag(Base):
     __tablename__ = "hashtags"
@@ -94,3 +108,21 @@ async def init_db():
                 await conn.commit()
             except Exception:
                 pass # Column already exists
+                
+        # Create videos table if it doesn't exist (Base.metadata.create_all handles this mostly, but just in case for older db)
+        try:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS videos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id BIGINT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'recorded',
+                    platform VARCHAR(32),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    posted_at DATETIME,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """)
+            await conn.commit()
+        except Exception:
+            pass

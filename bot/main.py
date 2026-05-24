@@ -31,6 +31,10 @@ async def main():
         stream=sys.stdout
     )
     
+    # Initialize Database first
+    logging.info("Initializing database...")
+    await init_db()
+    
     # Initialize Bot and Dispatcher
     bot = Bot(
         token=config.BOT_TOKEN.get_secret_value(),
@@ -62,17 +66,16 @@ async def main():
     from threading import Thread
     
     def run_api():
-        uvicorn.run(api_app, host="0.0.0.0", port=3000)
+        # Running on port 7328 as requested
+        uvicorn.run(api_app, host="0.0.0.0", port=7328)
     
     api_thread = Thread(target=run_api, daemon=True)
     api_thread.start()
+    logging.info("✅ API server started on port 7328")
     
     # Robust polling loop
     while True:
         try:
-            logging.info("Connecting to database...")
-            await init_db()
-            
             logging.info("Starting bot polling...")
             await dp.start_polling(bot, scheduler=scheduler)
         except Exception as e:
