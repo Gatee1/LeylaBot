@@ -40,6 +40,15 @@ async def startup_event():
     await init_db()
     print("✅ Database initialized successfully")
 
+@app.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "message": "✅ Leyla Creator OS API is running",
+        "version": "1.0.0",
+        "info": "Telegram Mini App backend is ready"
+    }
+
 # --- Schemas ---
 
 class IdeaBase(BaseModel):
