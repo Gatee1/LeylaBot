@@ -72,6 +72,13 @@ async def update_upload_status(user_id: int, platform: str, status: bool):
         elif platform == "vk": progress.uploaded_vk = status
         await session.commit()
 
+async def get_user_stats(user_id: int):
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(DailyProgress).where(DailyProgress.user_id == user_id).order_by(DailyProgress.date.desc())
+        )
+        return result.scalars().all()
+
 async def get_user_ideas(user_id: int):
     async with SessionLocal() as session:
         result = await session.execute(
