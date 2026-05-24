@@ -67,8 +67,14 @@ async def process_time_input(message: types.Message, state: FSMContext):
         await session.commit()
         
     await state.clear()
-    await message.answer_animation(
-        animation=ASSETS["success"],
-        caption=f"✅ Время успешно сохранено: <b>{time_str}</b>",
-        reply_markup=main_menu_kb()
-    )
+    try:
+        await message.answer_animation(
+            animation=ASSETS["success"],
+            caption=f"✅ Время успешно сохранено: <b>{time_str}</b>",
+            reply_markup=main_menu_kb()
+        )
+    except Exception:
+        await message.answer(
+            text=f"✅ Время успешно сохранено: <b>{time_str}</b>",
+            reply_markup=main_menu_kb()
+        )

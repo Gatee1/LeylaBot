@@ -35,27 +35,45 @@ async def view_stats(callback: types.CallbackQuery):
         plat_str = ", ".join(platforms) if platforms else "не выложено"
         text += f"• {s.date.strftime('%d.%m')}: {s.shots_count}/3 🎥 ({plat_str})\n"
         
-    await callback.message.edit_media(
-        media=types.InputMediaAnimation(media=ASSETS["stats"], caption=text),
-        reply_markup=main_menu_kb()
-    )
+    try:
+        await callback.message.edit_media(
+            media=types.InputMediaAnimation(media=ASSETS["stats"], caption=text),
+            reply_markup=main_menu_kb()
+        )
+    except Exception:
+        await callback.message.edit_caption(
+            caption=text,
+            reply_markup=main_menu_kb()
+        )
 
 @router.callback_query(F.data == "settings")
 async def settings_menu(callback: types.CallbackQuery):
-    await callback.message.edit_media(
-        media=types.InputMediaAnimation(
-            media=ASSETS["settings"], 
-            caption="⚙️ <b>Настройки:</b>\nЗдесь можно изменить время уведомлений."
-        ),
-        reply_markup=settings_kb()
-    )
+    try:
+        await callback.message.edit_media(
+            media=types.InputMediaAnimation(
+                media=ASSETS["settings"], 
+                caption="⚙️ <b>Настройки:</b>\nЗдесь можно изменить время уведомлений."
+            ),
+            reply_markup=settings_kb()
+        )
+    except Exception:
+        await callback.message.edit_caption(
+            caption="⚙️ <b>Настройки:</b>\nЗдесь можно изменить время уведомлений.",
+            reply_markup=settings_kb()
+        )
 
 @router.callback_query(F.data == "main_menu")
 async def back_to_main(callback: types.CallbackQuery):
-    await callback.message.edit_media(
-        media=types.InputMediaAnimation(
-            media=ASSETS["welcome"],
-            caption=f"👋 С возвращением!\n\nВыбирай действие в меню ниже:"
-        ),
-        reply_markup=main_menu_kb()
-    )
+    try:
+        await callback.message.edit_media(
+            media=types.InputMediaAnimation(
+                media=ASSETS["welcome"],
+                caption=f"👋 С возвращением!\n\nВыбирай действие в меню ниже:"
+            ),
+            reply_markup=main_menu_kb()
+        )
+    except Exception:
+        await callback.message.edit_caption(
+            caption=f"👋 С возвращением!\n\nВыбирай действие в меню ниже:",
+            reply_markup=main_menu_kb()
+        )

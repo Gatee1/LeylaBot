@@ -1,19 +1,32 @@
 import random
-from aiogram import Bot
+import logging
+from aiogram import Bot, types
 from bot.database.models import SessionLocal, User, DailyProgress
 from bot.database.requests import get_or_create_daily_progress, get_user_stats
 from sqlalchemy import select
 from datetime import date, datetime
+import zoneinfo
 
 from bot.utils.media_assets import ASSETS
+from bot.config import config
+
+logger = logging.getLogger(__name__)
 
 async def check_and_send_reminders(bot: Bot):
-    # Только с понедельника по пятницу
-    if date.today().weekday() > 4:
-        return
+    # Получаем время в целевом часовом поясе
+    tz = zoneinfo.ZoneInfo(config.DEFAULT_TIMEZONE)
+    now = datetime.now(tz)
+    now_time = now.strftime("%H:%M")
+    weekday = now.weekday()
 
-    now_time = datetime.now().strftime("%H:%M")
-    # Вечерняя рефлексия всегда в 21:00 по умолчанию, если не задано иное
+    # Ограничение по дням временно убрано по просьбе пользователя для теста
+    # if weekday > 4:
+    #     logger.info(f"Skipping reminders: today is weekend (weekday {weekday})")
+    #     return
+
+    logger.info(f"Checking reminders for time: {now_time}")
+    
+    # Вечерняя рефлексия всегда в 21:00 по умолчанию
     is_reflection_time = now_time == "21:00"
 
     async with SessionLocal() as session:
@@ -21,14 +34,18 @@ async def check_and_send_reminders(bot: Bot):
         users = result.scalars().all()
         
         for user in users:
-            # Проверяем все три времени напоминаний
-            if now_time in [user.morning_time, user.afternoon_time, user.evening_time]:
-                is_morning = now_time == user.morning_time
-                progress = await get_or_create_daily_progress(user.id)
-                await send_unified_reminder(bot, user, progress, is_morning)
-            
-            if is_reflection_time:
-                await send_evening_reflection(bot, user)
+            try:
+                # Проверяем все три времени напоминаний
+                user_times = [user.morning_time, user.afternoon_time, user.evening_time]
+                if now_time in user_times:
+                    is_morning = now_time == user.morning_time
+                    progress = await get_or_create_daily_progress(user.id)
+                    await send_unified_reminder(bot, user, progress, is_morning)
+                
+                if is_reflection_time:
+                    await send_evening_reflection(bot, user)
+            except Exception as e:
+                logger.error(f"Error processing reminders for user {user.id}: {e}")
 
 async def send_evening_reflection(bot: Bot, user: User):
     questions = [
@@ -47,10 +64,6 @@ async def send_evening_reflection(bot: Bot, user: User):
     )
     
     try:
-        from bot.handlers.reflection import ReflectionStates
-        from aiogram.fsm.context import FSMContext
-        # We can't easily set state from scheduler without a message, 
-        # but we can send a message with a button to start reflection
         kb = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="Ответить ✨", callback_data="start_reflection")]
         ])
@@ -62,8 +75,9 @@ async def send_evening_reflection(bot: Bot, user: User):
             reply_markup=kb,
             parse_mode="HTML"
         )
+        logger.info(f"Reflection sent to user {user.id}")
     except Exception as e:
-        print(f"Failed to send reflection to {user.id}: {e}")
+        logger.error(f"Failed to send reflection to {user.id}: {e}")
 
 async def send_unified_reminder(bot: Bot, user: User, progress: DailyProgress, is_morning: bool = False):
     shots = progress.shots_count
@@ -118,8 +132,9 @@ async def send_unified_reminder(bot: Bot, user: User, progress: DailyProgress, i
                 caption=text,
                 parse_mode="HTML"
             )
+        logger.info(f"Unified reminder sent to user {user.id}")
     except Exception as e:
-        print(f"Failed to send reminder to {user.id}: {e}")
+        logger.error(f"Failed to send unified reminder to {user.id}: {e}")
 
 async def send_weekly_report(bot: Bot):
     async with SessionLocal() as session:

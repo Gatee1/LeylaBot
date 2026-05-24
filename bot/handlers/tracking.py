@@ -8,13 +8,19 @@ router = Router()
 @router.callback_query(F.data == "track_shooting")
 async def track_shooting(callback: types.CallbackQuery):
     progress = await get_or_create_daily_progress(callback.from_user.id)
-    await callback.message.edit_media(
-        media=types.InputMediaAnimation(
-            media=ASSETS["shooting"],
-            caption=f"🎥 <b>Отметь снятые сегодня ролики:</b>\nТвоя цель на сегодня: 3 шт."
-        ),
-        reply_markup=shooting_kb(progress.shots_count)
-    )
+    try:
+        await callback.message.edit_media(
+            media=types.InputMediaAnimation(
+                media=ASSETS["shooting"],
+                caption=f"🎥 <b>Отметь снятые сегодня ролики:</b>\nТвоя цель на сегодня: 3 шт."
+            ),
+            reply_markup=shooting_kb(progress.shots_count)
+        )
+    except Exception:
+        await callback.message.edit_caption(
+            caption=f"🎥 <b>Отметь снятые сегодня ролики:</b>\nТвоя цель на сегодня: 3 шт.",
+            reply_markup=shooting_kb(progress.shots_count)
+        )
 
 @router.callback_query(F.data.startswith("shot_"))
 async def handle_shot(callback: types.CallbackQuery):
@@ -28,21 +34,33 @@ async def handle_shot(callback: types.CallbackQuery):
         text += "\n\n🚀 План по съёмке выполнен! Пора выкладывать?"
         
     await callback.answer(f"Записано: {count}")
-    await callback.message.edit_caption(
-        caption=text,
-        reply_markup=shooting_kb(progress.shots_count)
-    )
+    try:
+        await callback.message.edit_caption(
+            caption=text,
+            reply_markup=shooting_kb(progress.shots_count)
+        )
+    except Exception:
+        await callback.message.answer(
+            text=text,
+            reply_markup=shooting_kb(progress.shots_count)
+        )
 
 @router.callback_query(F.data == "track_upload")
 async def track_upload(callback: types.CallbackQuery):
     progress = await get_or_create_daily_progress(callback.from_user.id)
-    await callback.message.edit_media(
-        media=types.InputMediaAnimation(
-            media=ASSETS["upload"],
-            caption="🚀 <b>Отметь площадки, на которые уже выложен контент:</b>"
-        ),
-        reply_markup=upload_kb(progress)
-    )
+    try:
+        await callback.message.edit_media(
+            media=types.InputMediaAnimation(
+                media=ASSETS["upload"],
+                caption="🚀 <b>Отметь площадки, на которые уже выложен контент:</b>"
+            ),
+            reply_markup=upload_kb(progress)
+        )
+    except Exception:
+        await callback.message.edit_caption(
+            caption="🚀 <b>Отметь площадки, на которые уже выложен контент:</b>",
+            reply_markup=upload_kb(progress)
+        )
 
 @router.callback_query(F.data.startswith("toggle_"))
 async def handle_toggle(callback: types.CallbackQuery):

@@ -47,10 +47,16 @@ async def view_ideas(callback: types.CallbackQuery):
         [types.InlineKeyboardButton(text="« Назад", callback_data="main_menu")]
     ])
     
-    await callback.message.edit_media(
-        media=types.InputMediaAnimation(media=ASSETS["ideas"], caption=text),
-        reply_markup=kb
-    )
+    try:
+        await callback.message.edit_media(
+            media=types.InputMediaAnimation(media=ASSETS["ideas"], caption=text),
+            reply_markup=kb
+        )
+    except Exception:
+        await callback.message.edit_caption(
+            caption=text,
+            reply_markup=kb
+        )
 
 @router.callback_query(F.data == "add_idea")
 async def add_idea_start(callback: types.CallbackQuery, state: FSMContext):
@@ -98,12 +104,12 @@ async def process_idea(message: types.Message, state: FSMContext):
     try:
         await message.answer_animation(
             animation=ASSETS["success"],
-            caption="✅ Идея сохранена в твой банк!",
+            caption="✅ <b>Идея сохранена в твой банк!</b>\nЯ напомню о ней, когда ты пойдешь снимать контент.",
             reply_markup=main_menu_kb()
         )
     except Exception:
         await message.answer(
-            "✅ Идея сохранена в твой банк!",
+            text="✅ <b>Идея сохранена в твой банк!</b>\nЯ напомню о ней, когда ты пойдешь снимать контент.",
             reply_markup=main_menu_kb()
         )
 

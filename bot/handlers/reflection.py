@@ -27,11 +27,17 @@ async def process_reflection_answer(message: types.Message, state: FSMContext):
         await session.commit()
         
     await state.clear()
-    await message.answer_animation(
-        animation=ASSETS["success"],
-        caption="✅ Твоя рефлексия сохранена. Ты молодец, что находишь время на анализ! Спокойной ночи! ✨",
-        reply_markup=main_menu_kb()
-    )
+    try:
+        await message.answer_animation(
+            animation=ASSETS["success"],
+            caption="✅ Твоя рефлексия сохранена. Ты молодец, что находишь время на анализ! Спокойной ночи! ✨",
+            reply_markup=main_menu_kb()
+        )
+    except Exception:
+        await message.answer(
+            text="✅ Твоя рефлексия сохранена. Ты молодец, что находишь время на анализ! Спокойной ночи! ✨",
+            reply_markup=main_menu_kb()
+        )
 
 @router.callback_query(F.data == "view_reflections")
 async def view_reflections(callback: types.CallbackQuery):

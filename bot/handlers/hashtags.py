@@ -74,11 +74,17 @@ async def process_hashtag_content(message: types.Message, state: FSMContext):
         await session.commit()
         
     await state.clear()
-    await message.answer_animation(
-        animation=ASSETS["success"],
-        caption=f"✅ Набор '{data['name']}' сохранен!",
-        reply_markup=main_menu_kb()
-    )
+    try:
+        await message.answer_animation(
+            animation=ASSETS["success"],
+            caption=f"✅ Набор '{data['name']}' сохранен!",
+            reply_markup=main_menu_kb()
+        )
+    except Exception:
+        await message.answer(
+            text=f"✅ Набор '{data['name']}' сохранен!",
+            reply_markup=main_menu_kb()
+        )
 
 @router.callback_query(F.data.startswith("del_hashtag_"))
 async def delete_hashtag(callback: types.CallbackQuery):
