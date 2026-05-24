@@ -6,18 +6,28 @@ async def get_user(user_id: int):
     async with SessionLocal() as session:
         return await session.get(User, user_id)
 
-async def add_user(user_id: int, username: str, full_name: str):
+async def add_user(user_id: int, username: str, full_name: str, **kwargs):
     async with SessionLocal() as session:
         user = await session.get(User, user_id)
         if not user:
-            user = User(id=user_id, username=username, full_name=full_name)
+            user = User(id=user_id, username=username, full_name=full_name, **kwargs)
             session.add(user)
             try:
                 await session.commit()
             except Exception:
                 await session.rollback()
-                # If user was created by another concurrent request, just return existing
                 user = await session.get(User, user_id)
+        return user
+
+async def update_user(user_id: int, **kwargs):
+    async with SessionLocal() as session:
+        user = await session.get(User, user_id)
+        if user:
+            for key, value in kwargs.items():
+                if hasattr(user, key):
+                    setattr(user, key, value)
+            await session.commit()
+            await session.refresh(user)
         return user
 
 async def get_or_create_daily_progress(user_id: int, target_date: date = None, session=None):

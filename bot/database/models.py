@@ -17,12 +17,26 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[str | None] = mapped_column(String(128))
     full_name: Mapped[str] = mapped_column(String(128))
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
     morning_time: Mapped[str] = mapped_column(String(5), default="10:00")
     afternoon_time: Mapped[str] = mapped_column(String(5), default="14:00")
     evening_time: Mapped[str] = mapped_column(String(5), default="19:00")
+    
+    # New fields for Mini App
+    platforms: Mapped[list[str]] = mapped_column(JSON, default=list) # yt, ig, tt, vk
+    daily_goal: Mapped[int] = mapped_column(Integer, default=3)
+    
+    # Notifications
+    notif_daily_reminder: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_streak_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_ideas_digest: Mapped[bool] = mapped_column(Boolean, default=True)
+    
     streak: Mapped[int] = mapped_column(Integer, default=0)
     max_streak: Mapped[int] = mapped_column(Integer, default=0)
+    
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     
     progress: Mapped[list["DailyProgress"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -104,6 +118,22 @@ async def init_db():
         
     # Manual migration for existing SQLite database
     async with engine.connect() as conn:
+        # Add columns to users table if they don't exist
+        for column, type_ in [
+            ("avatar_url", "TEXT"),
+            ("platforms", "JSON"),
+            ("daily_goal", "INTEGER DEFAULT 3"),
+            ("notif_daily_reminder", "BOOLEAN DEFAULT 1"),
+            ("notif_streak_alerts", "BOOLEAN DEFAULT 1"),
+            ("notif_ideas_digest", "BOOLEAN DEFAULT 1"),
+            ("onboarded_at", "DATETIME")
+        ]:
+            try:
+                await conn.execute(f"ALTER TABLE users ADD COLUMN {column} {type_}")
+                await conn.commit()
+            except Exception:
+                pass
+
         # Add columns to ideas table if they don't exist
         for column, type_ in [
             ("title", "VARCHAR(255)"),
