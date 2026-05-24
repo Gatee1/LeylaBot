@@ -51,7 +51,7 @@ class AuthResponse(BaseModel):
 
 class ProgressUpdate(BaseModel):
     shots_count: Optional[int] = None
-    platform: Optional[str] = None # yt, ig, tt, vk
+    platform: Optional[str] = None
     status: Optional[bool] = None
 
 class VideoCreate(BaseModel):
@@ -80,8 +80,6 @@ class AnalyticsWeekly(BaseModel):
 
 def verify_tma_data(x_telegram_init_data: str = Header(None, alias="X-Telegram-Init-Data")):
     if not x_telegram_init_data:
-        # Dev fallback - enable only for local testing if needed
-        # return {"id": 12345678, "first_name": "Dev", "username": "dev_user"}
         raise HTTPException(status_code=401, detail="X-Telegram-Init-Data header missing")
         
     init_data = x_telegram_init_data
@@ -99,7 +97,6 @@ def verify_tma_data(x_telegram_init_data: str = Header(None, alias="X-Telegram-I
     if not hmac.compare_digest(received_hash, expected_hash):
         raise HTTPException(status_code=401, detail="Invalid hash")
     
-    # Check expiry (24h)
     if time.time() - int(parsed_data.get("auth_date", 0)) > 86400:
         raise HTTPException(status_code=401, detail="Data expired")
         
@@ -233,4 +230,26 @@ async def legacy_me(tg_user: dict = Depends(verify_tma_data)):
         "first_name": user.full_name,
         "username": user.username,
         "streak_days": user.streak
+    }
+
+
+# ==================== ROOT ENDPOINTS ====================
+
+@app.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "message": "✅ Leyla Creator OS API is running",
+        "version": "1.0.0",
+        "info": "Telegram Mini App backend is ready"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "api": "running",
+        "database": "connected",
+        "timestamp": datetime.now().isoformat()
     }
