@@ -44,18 +44,30 @@ async def _get_or_create_progress_logic(user_id, target_date, session, commit=Fa
     result = await session.execute(
         select(DailyProgress).where(
             and_(DailyProgress.user_id == user_id, DailyProgress.date == target_date)
-        )
+        ).order_by(DailyProgress.id.desc())
     )
-    progress = result.scalar_one_or_none()
+    progresses = result.scalars().all()
     
-    if not progress:
+    if not progresses:
         progress = DailyProgress(user_id=user_id, date=target_date)
         session.add(progress)
         if commit:
-            await session.commit()
-            await session.refresh(progress)
-            
-    return progress
+            try:
+                await session.commit()
+                await session.refresh(progress)
+            except Exception:
+                await session.rollback()
+                # If commit fails, it might be a race condition, try fetching again
+                result = await session.execute(
+                    select(DailyProgress).where(
+                        and_(DailyProgress.user_id == user_id, DailyProgress.date == target_date)
+                    )
+                )
+                progress = result.scalars().first()
+        return progress
+    
+    # If multiple found, return the most recent one (highest ID)
+    return progresses[0]
 
 async def update_shots(user_id: int, count: int):
     async with SessionLocal() as session:

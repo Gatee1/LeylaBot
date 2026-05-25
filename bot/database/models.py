@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import BigInteger, String, Integer, Date, DateTime, ForeignKey, Boolean, JSON
+from sqlalchemy import BigInteger, String, Integer, Date, DateTime, ForeignKey, Boolean, JSON, UniqueConstraint, select, delete, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from bot.config import config
@@ -48,6 +48,7 @@ class User(Base):
 
 class DailyProgress(Base):
     __tablename__ = "daily_progress"
+    __table_args__ = (UniqueConstraint('user_id', 'date', name='_user_date_uc'),)
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -138,9 +139,9 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-    # Manual migration for existing SQLite database
+    # Manual migrations and cleanup
     async with engine.connect() as conn:
-        # Add columns to users table if they don't exist
+        # 1. Add columns to users table
         for column, type_ in [
             ("avatar_url", "TEXT"),
             ("platforms", "JSON"),
@@ -156,7 +157,7 @@ async def init_db():
             except Exception:
                 pass
 
-        # Add columns to ideas table if they don't exist
+        # 2. Add columns to ideas table
         for column, type_ in [
             ("title", "VARCHAR(255)"),
             ("description", "TEXT"),
@@ -169,27 +170,24 @@ async def init_db():
                 await conn.execute(f"ALTER TABLE ideas ADD COLUMN {column} {type_}")
                 await conn.commit()
             except Exception:
-                pass # Column already exists
-
-        # Add columns to daily_progress table if they don't exist
-        for column, type_ in [
-            ("posts_count", "INTEGER DEFAULT 0")
-        ]:
-            try:
-                await conn.execute(f"ALTER TABLE daily_progress ADD COLUMN {column} {type_}")
-                await conn.commit()
-            except Exception:
                 pass
+
+        # 3. Add columns to daily_progress
+        try:
+            await conn.execute("ALTER TABLE daily_progress ADD COLUMN posts_count INTEGER DEFAULT 0")
+            await conn.commit()
+        except Exception:
+            pass
         
-        # Ensure shots_count and posts_count are not NULL
+        # 4. Data cleanup: Ensure shots_count and posts_count are not NULL
         try:
             await conn.execute("UPDATE daily_progress SET shots_count = 0 WHERE shots_count IS NULL")
             await conn.execute("UPDATE daily_progress SET posts_count = 0 WHERE posts_count IS NULL")
             await conn.commit()
         except Exception:
             pass
-                
-        # Create videos table if it doesn't exist
+
+        # 5. Create missing tables
         try:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS videos (
@@ -206,3 +204,27 @@ async def init_db():
             await conn.commit()
         except Exception:
             pass
+
+    # 6. Duplicates cleanup (using SessionLocal)
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(DailyProgress.user_id, DailyProgress.date)
+            .group_by(DailyProgress.user_id, DailyProgress.date)
+            .having(func.count(DailyProgress.id) > 1)
+        )
+        duplicates = result.all()
+        
+        if duplicates:
+            print(f"🔍 Found {len(duplicates)} pairs with duplicates. Cleaning up...")
+            for user_id, target_date in duplicates:
+                result = await session.execute(
+                    select(DailyProgress.id)
+                    .where(DailyProgress.user_id == user_id, DailyProgress.date == target_date)
+                    .order_by(DailyProgress.id.desc())
+                )
+                ids = result.scalars().all()
+                await session.execute(
+                    delete(DailyProgress).where(DailyProgress.id.in_(ids[1:]))
+                )
+            await session.commit()
+            print("✅ Duplicates cleanup complete.")
