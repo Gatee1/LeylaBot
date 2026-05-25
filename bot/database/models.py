@@ -44,6 +44,7 @@ class User(Base):
     videos: Mapped[list["Video"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     hashtags: Mapped[list["Hashtag"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     reflections: Mapped[list["Reflection"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    accounts: Mapped[list["Account"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 class DailyProgress(Base):
     __tablename__ = "daily_progress"
@@ -52,7 +53,8 @@ class DailyProgress(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     date: Mapped[date] = mapped_column(Date, default=date.today)
     
-    shots_count: Mapped[int] = mapped_column(Integer, default=0)
+    shots_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    posts_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     
     # Platform upload status
     uploaded_yt: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -61,6 +63,26 @@ class DailyProgress(Base):
     uploaded_vk: Mapped[bool] = mapped_column(Boolean, default=False)
     
     user: Mapped["User"] = relationship(back_populates="progress")
+
+class Account(Base):
+    __tablename__ = "accounts"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    platform: Mapped[str] = mapped_column(String(32)) # youtube, instagram, tiktok
+    handle: Mapped[str | None] = mapped_column(String(128))
+    display_name: Mapped[str | None] = mapped_column(String(128))
+    avatar_url: Mapped[str | None] = mapped_column(String)
+    followers: Mapped[int] = mapped_column(Integer, default=0)
+    connected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    status: Mapped[str] = mapped_column(String(32), default="active") # active, expired
+    
+    # Tokens (in a real app, these should be encrypted)
+    access_token: Mapped[str | None] = mapped_column(String)
+    refresh_token: Mapped[str | None] = mapped_column(String)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    
+    user: Mapped["User"] = relationship(back_populates="accounts")
 
 class Idea(Base):
     __tablename__ = "ideas"
@@ -148,8 +170,26 @@ async def init_db():
                 await conn.commit()
             except Exception:
                 pass # Column already exists
+
+        # Add columns to daily_progress table if they don't exist
+        for column, type_ in [
+            ("posts_count", "INTEGER DEFAULT 0")
+        ]:
+            try:
+                await conn.execute(f"ALTER TABLE daily_progress ADD COLUMN {column} {type_}")
+                await conn.commit()
+            except Exception:
+                pass
+        
+        # Ensure shots_count and posts_count are not NULL
+        try:
+            await conn.execute("UPDATE daily_progress SET shots_count = 0 WHERE shots_count IS NULL")
+            await conn.execute("UPDATE daily_progress SET posts_count = 0 WHERE posts_count IS NULL")
+            await conn.commit()
+        except Exception:
+            pass
                 
-        # Create videos table if it doesn't exist (Base.metadata.create_all handles this mostly, but just in case for older db)
+        # Create videos table if it doesn't exist
         try:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS videos (

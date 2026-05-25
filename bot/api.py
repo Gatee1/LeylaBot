@@ -3,21 +3,24 @@ import hmac
 import json
 import time
 import logging
-from typing import List, Optional
+import uuid
+from typing import List, Optional, Literal
 from urllib.parse import parse_qs
 from datetime import date, datetime
 from fastapi import FastAPI, Header, HTTPException, Depends, Body
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from bot.config import config
 from bot.database.requests import (
-    get_user, add_user, get_or_create_daily_progress, update_shots, 
+    get_user, add_user, update_user, get_or_create_daily_progress, update_shots, 
     update_upload_status, get_user_streak,
     add_video, get_user_videos, update_video_status,
-    get_weekly_analytics, get_top_videos,
+    get_weekly_analytics, get_top_videos, get_detailed_analytics,
     get_user_ideas, add_idea, update_idea, delete_idea,
-    get_studio_today, record_studio_action
+    get_studio_today, record_studio_action,
+    get_user_accounts, save_account, delete_account, fetch_account_analytics
 )
 from bot.database.models import SessionLocal, init_db
 
@@ -121,6 +124,53 @@ class RegisterPayload(BaseModel):
     daily_goal: int
     notifications: Notifications
 
+class MePatch(BaseModel):
+    timezone: Optional[str] = None
+    daily_goal: Optional[int] = None
+    platforms: Optional[List[str]] = None
+    notifications: Optional[dict] = None
+
+class ConnectStart(BaseModel):
+    platform: Literal["youtube", "instagram", "tiktok"]
+
+# --- OAuth Helpers (In-memory state for now) ---
+OAUTH_STATES = {} # state -> tg_id
+
+def create_oauth_state(tg_id: int, platform: str) -> str:
+    state = str(uuid.uuid4())
+    OAUTH_STATES[state] = tg_id
+    return state
+
+def consume_oauth_state(state: str) -> Optional[int]:
+    return OAUTH_STATES.pop(state, None)
+
+def build_oauth_url(platform: str, state: str) -> str:
+    # Dummy URLs for demonstration
+    if platform == "youtube":
+        return f"https://accounts.google.com/o/oauth2/v2/auth?client_id=DUMMY&redirect_uri={config.API_BASE}/oauth/youtube/callback&response_type=code&scope=https://www.googleapis.com/auth/youtube.readonly&state={state}"
+    elif platform == "instagram":
+        return f"https://api.instagram.com/oauth/authorize?client_id=DUMMY&redirect_uri={config.API_BASE}/oauth/instagram/callback&scope=user_profile,user_media&response_type=code&state={state}"
+    elif platform == "tiktok":
+        return f"https://www.tiktok.com/v2/auth/authorize/?client_key=DUMMY&scope=user.info.basic,video.list&response_type=code&redirect_uri={config.API_BASE}/oauth/tiktok/callback&state={state}"
+    return "#"
+
+async def exchange_code(platform: str, code: str) -> dict:
+    # Mock token exchange
+    return {
+        "access_token": f"mock_access_{uuid.uuid4()}",
+        "refresh_token": f"mock_refresh_{uuid.uuid4()}",
+        "expires_in": 3600
+    }
+
+async def fetch_profile(platform: str, tokens: dict) -> dict:
+    # Mock profile fetch
+    return {
+        "handle": f"creator_{platform}",
+        "display_name": f"Creator {platform.capitalize()}",
+        "avatar_url": None,
+        "followers": 1250
+    }
+
 # --- Auth Dependency ---
 
 def verify_tma_data(x_telegram_init_data: str = Header(None, alias="X-Telegram-Init-Data")):
@@ -182,7 +232,7 @@ def user_to_response(user, is_new=False):
             "ideas_digest": user.notif_ideas_digest
         },
         "onboarded_at": user.onboarded_at,
-        "streak": user.streak,
+        "streak": user.streak or 0,
         "is_new": is_new
     }
 
@@ -233,12 +283,67 @@ async def auth_me(tg_user: dict = Depends(verify_tma_data)):
         raise HTTPException(status_code=404, detail="User not registered")
     return user_to_response(user)
 
-@app.get("/users/me", response_model=AuthResponse)
-async def get_me(tg_user: dict = Depends(verify_tma_data)):
-    user = await get_user(tg_user["id"])
+@app.patch("/me", response_model=AuthResponse)
+async def update_me(payload: MePatch, tg_user: dict = Depends(verify_tma_data)):
+    # Convert payload to dict and handle nested notifications if present
+    data = payload.dict(exclude_unset=True)
+    if "notifications" in data and data["notifications"]:
+        notifs = data.pop("notifications")
+        if "daily_reminder" in notifs: data["notif_daily_reminder"] = notifs["daily_reminder"]
+        if "streak_alerts" in notifs: data["notif_streak_alerts"] = notifs["streak_alerts"]
+        if "ideas_digest" in notifs: data["notif_ideas_digest"] = notifs["ideas_digest"]
+        
+    user = await update_user(tg_user["id"], **data)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user_to_response(user)
+
+# --- Accounts & OAuth Endpoints ---
+
+@app.get("/accounts")
+async def list_accounts(tg_user: dict = Depends(verify_tma_data)):
+    return await get_user_accounts(tg_user["id"])
+
+@app.post("/accounts/connect")
+async def start_connect(body: ConnectStart, tg_user: dict = Depends(verify_tma_data)):
+    state = create_oauth_state(tg_user["id"], body.platform)
+    auth_url = build_oauth_url(body.platform, state)
+    return {"auth_url": auth_url, "state": state}
+
+@app.get("/oauth/{platform}/callback")
+async def oauth_callback(platform: str, code: str, state: str):
+    tg_id = consume_oauth_state(state)
+    if not tg_id:
+        return HTMLResponse("<h1>Ошибка: Невалидный state. Попробуйте снова.</h1>", status_code=400)
+        
+    tokens = await exchange_code(platform, code)
+    profile = await fetch_profile(platform, tokens)
+    await save_account(tg_id, platform, tokens, profile)
+    
+    return HTMLResponse("""
+        <html>
+            <body style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; background: #0f172a; color: white; text-align: center;">
+                <div>
+                    <h1 style="color: #c084fc;">✅ Готово!</h1>
+                    <p>Аккаунт успешно подключен.</p>
+                    <p>Теперь вы можете закрыть это окно и вернуться в приложение.</p>
+                </div>
+            </body>
+        </html>
+    """)
+
+@app.delete("/accounts/{account_id}")
+async def disconnect_account(account_id: int, tg_user: dict = Depends(verify_tma_data)):
+    success = await delete_account(tg_user["id"], account_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"ok": True}
+
+@app.post("/accounts/{account_id}/refresh")
+async def refresh_account(account_id: int, tg_user: dict = Depends(verify_tma_data)):
+    # In a real app, this would refresh tokens and fetch new metrics
+    # For now, just return the analytics
+    return await fetch_account_analytics(tg_user["id"], account_id)
 
 # --- Studio Endpoints (TanStack Start Expected) ---
 
@@ -285,16 +390,56 @@ async def remove_idea(idea_id: int, tg_user: dict = Depends(verify_tma_data)):
 
 # --- Analytics Endpoints ---
 
-@app.get("/analytics", response_model=AnalyticsResponse)
-async def analytics_overview(tg_user: dict = Depends(verify_tma_data)):
-    # Mocking some data for the frontend to display something pretty
-    return {
-        "platforms": [
-            {"platform": "YouTube", "reach": 1250, "growth": 12, "top_post": {"title": "Viral Shot 1", "views": 5000}},
-            {"platform": "Instagram", "reach": 850, "growth": -5, "top_post": {"title": "Aesthetic Reel", "views": 2000}},
-            {"platform": "TikTok", "reach": 3200, "growth": 45, "top_post": {"title": "Funny Trend", "views": 15000}},
-        ]
+@app.get("/analytics")
+async def analytics_overview(
+    account_id: Optional[int] = None, 
+    range: Literal["7d", "30d", "90d"] = "30d",
+    tg_user: dict = Depends(verify_tma_data)
+):
+    if account_id:
+        data = await fetch_account_analytics(tg_user["id"], account_id, range)
+        if not data:
+            raise HTTPException(status_code=404, detail="Account not found")
+        return data
+        
+    return await get_detailed_analytics(tg_user["id"])
+
+@app.get("/export")
+async def export_data(tg_user: dict = Depends(verify_tma_data)):
+    user_id = tg_user["id"]
+    user = await get_user(user_id)
+    ideas = await get_user_ideas(user_id)
+    videos = await get_user_videos(user_id)
+    progress = await get_weekly_analytics(user_id)
+    
+    export_obj = {
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "platforms": user.platforms,
+            "streak": user.streak
+        },
+        "ideas": [
+            {
+                "title": i.title,
+                "description": i.description,
+                "status": i.status,
+                "platform": i.platform,
+                "created_at": i.created_at.isoformat() if i.created_at else None
+            } for i in ideas
+        ],
+        "videos": [
+            {
+                "title": v.title,
+                "status": v.status,
+                "platform": v.platform,
+                "posted_at": v.posted_at.isoformat() if v.posted_at else None
+            } for v in videos
+        ],
+        "weekly_progress": progress
     }
+    
+    return export_obj
 
 # Legacy support
 @app.get("/api/me")

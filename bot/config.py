@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     # Goals
     DAILY_GOAL: int = 3
     
+    API_BASE: str = "https://leyla.bothost.tech"
+    
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_file_encoding="utf-8",
